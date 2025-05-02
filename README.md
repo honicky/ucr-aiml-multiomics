@@ -29,13 +29,6 @@ We use `uv` for Python dependency management. It's a fast, reliable Python packa
 
 2. Initialize the project:
    ```bash
-   # Create virtual environment
-   uv venv
-   source .venv/bin/activate  # On Unix/macOS
-   # or
-   .venv\Scripts\activate     # On Windows
-   
-   # Initialize project dependencies
    uv sync
    ```
 
