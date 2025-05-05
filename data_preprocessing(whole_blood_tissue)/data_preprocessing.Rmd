@@ -1,0 +1,219 @@
+---
+title: "Untitled"
+author: "Yijia Xue"
+date: "2025-04-27"
+output: html_document
+---
+
+```{r}
+dat<-read.delim(file="/Users/yijiaxue/Desktop/tpm.gct", skip = 2, header = TRUE, stringsAsFactors = FALSE)
+```
+
+```{r}
+library(dplyr)
+wholeblood<- metadata %>%
+  filter(SMTSD=="Whole Blood")
+
+colnames(dat)[3:ncol(dat)] <- gsub("\\.", "-", colnames(dat)[3:ncol(dat)])
+
+sampids <- wholeblood$SAMPID
+
+sampids_in_dat <- sampids[sampids %in% colnames(dat)]
+
+matched_dat<-dat[,c(sampids_in_dat)]
+
+matched_dat<- cbind(dat[,c(1,2)],matched_dat)
+
+
+```
+
+
+
+```{r}
+#log transformation
+log_matched <- log2(expr + 1)
+normalized_matched_dat <- cbind(matched_dat[, 1:2], log_matched)
+```
+The log2 transformation stabilizes variance across genes with highly different expression levels, reducing the influence of outliers and facilitating downstream analysis such as clustering or differential expression.
+
+```{r}
+# sex-linked genes
+sex_linked_genes <- normalized_matched_dat %>%
+  filter(Description %in% c("XIST", "RPS4Y1"))
+
+library(tidyr)
+library(stringr)
+
+sex_linked_long <- sex_linked_genes %>%
+  pivot_longer(
+    cols = -c(Name, Description),
+    names_to = "Sample",
+    values_to = "Expression"
+  )
+
+sex_linked_long <- sex_linked_long %>%
+  mutate(
+    SUBJID = str_sub(Sample, 1, 10),      
+    SUBJID = str_remove(SUBJID, "-$")       
+  )
+
+sex_linked_long <- sex_linked_long %>%
+  left_join(metadata2, by = "SUBJID") %>%
+  mutate(SEX = recode(SEX, `1` = "Male", `2` = "Female"))
+
+library(ggplot2)
+
+ggplot(sex_linked_long, aes(x = Description, y = Expression, color = SEX)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.7) +
+  labs(title = "Sex-Linked Gene Expression by Sex",
+       x = "Gene",
+       y = "Normalized Expression",
+       color = "Sex") +
+  theme_minimal()
+
+
+```
+
+## Modify dataset for model application
+
+```{r}
+X <- matched_dat[, -c(1,2)]
+sex_labels <- sex_linked_long %>%
+  distinct(Sample, SEX)
+
+X_t <- t(X)
+X_df <- as.data.frame(X_t)
+colnames(X_df)<-matched_dat$Name
+X_df$SEX <- sex_labels
+
+
+X_df$SEX_numeric <- ifelse(X_df$SEX == "Male", 0, 1)
+
+
+```
+
+
+```{r}
+X_df_with_subjid <- X_df %>%
+  mutate(
+    Sample = rownames(.),            # directly pull rownames into a new "Sample" column
+    SUBJID = str_sub(Sample, 1, 10),  # extract first 10 characters for subject ID
+    SUBJID = str_remove(SUBJID, "-$") # remove trailing dash if any
+  )
+
+age_data <- metadata2 %>%
+  select(SUBJID, AGE)
+
+# (optional) If you want AGE as numeric midpoint like 65, 55 etc., first convert:
+age_midpoints <- c(
+  "20-29" = 25,
+  "30-39" = 35,
+  "40-49" = 45,
+  "50-59" = 55,
+  "60-69" = 65,
+  "70-79" = 75,
+  "80-89" = 85
+)
+
+# Add AGE_numeric
+age_data <- age_data %>%
+  mutate(AGE_numeric = age_midpoints[as.character(AGE)])
+
+# Step 2: Join AGE_numeric into your X_df_with_subjid
+X_df_with_age <- X_df_with_subjid %>%
+  left_join(age_data, by = "SUBJID")
+
+```
+
+### Linear Regression
+
+```{r}
+library(dplyr)
+library(broom)
+
+X_df_with_age_clean <- X_df_with_age %>%
+  select(-Sample, -SEX)
+# List of genes
+ensembl_genes <- colnames(X_df_with_age_clean)[grepl("^ENSG", colnames(X_df_with_age))]
+
+# Empty result
+results <- data.frame(
+  Gene = character(),
+  Beta = numeric(),
+  P_value = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (gene in ensembl_genes) {
+  fmla <- as.formula(paste("SEX_numeric ~", gene, "+ AGE_numeric"))
+  model <- tryCatch(lm(fmla, data = X_df_with_age_clean), error = function(e) NULL)
+  mod_sum<-summary(model)
+  results<- rbind(results, data.frame(
+    Gene=gene,
+    Beta= model$coefficients[2,2],
+    P_value = mod_sum$`Response SEX`$coefficients[2,4]
+  ))
+}
+
+# View
+head(results)
+
+results$adjusted_P_value <-p.adjust(results$P_value, method = "BH")
+
+
+sig_results<- results %>%
+  filter(adjusted_P_value <= 0.05) %>%
+  arrange(desc(abs(Beta)))
+
+gene_description <- dat %>%
+  select(Name, Description)
+
+
+sig_results_with_desc <- sig_results %>%
+  left_join(dat %>% select(Name, Description), by = c("Gene" = "Name")) %>%
+  select(Gene, Description, everything())
+
+
+
+
+
+```
+
+```{r}
+result_genes <- matched_dat %>%
+  filter(Description %in% c("TSIX","SHROOM2P1","ARSH","FAM224B"))
+
+
+
+result_genes_long <- result_genes %>%
+  pivot_longer(
+    cols = -c(Name, Description),
+    names_to = "Sample",
+    values_to = "Expression"
+  )
+
+result_genes_long <- result_genes_long %>%
+  mutate(
+    SUBJID = str_sub(Sample, 1, 10),      
+    SUBJID = str_remove(SUBJID, "-$")       
+  )
+
+result_genes_long <- result_genes_long %>%
+  left_join(metadata2, by = "SUBJID") %>%
+  mutate(SEX = recode(SEX, `1` = "Male", `2` = "Female"))
+
+
+
+ggplot(result_genes_long, aes(x = Description, y = Expression, color = SEX)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.7) +
+  labs(title = "Gene Expression by Sex",
+       x = "Gene",
+       y = "Expression",
+       color = "Sex") +
+  theme_minimal()
+```
+
+
+
