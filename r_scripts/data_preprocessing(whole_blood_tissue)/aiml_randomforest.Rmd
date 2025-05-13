@@ -1,0 +1,93 @@
+---
+title: "aiml_randomforest"
+author: "Yijia Xue"
+date: "2025-05-11"
+output: html_document
+---
+
+
+Random Forest (filter using variance)
+```{r}
+# library(randomForest)
+# 
+# # Keep top 1000 most variable genes
+# gene_var <- apply(X_df[,c(1:56200)], 2, var)
+# top_genes_idx <- order(gene_var, decreasing = TRUE)[1:1000]
+# X_filtered_var <- X_df[, top_genes_idx]
+# X_filtered_var<- cbind(X_filtered_var, X_df[,c(56202)])
+# 
+# rf_model <- randomForest(as.factor(SEX) ~ ., data = X_filtered_var, importance = TRUE)
+# importance <- importance(rf_model)
+# top_genes <- rownames(importance)[order(importance[, 1], decreasing = TRUE)[1:50]]
+
+```
+```{r}
+# X_df contains genes and two columns of sex. 
+# Separate gene and sex for easier coding.
+
+X_expr<-X_df[,c(1:56200)]
+sex <- as.factor(X_df$SEX_numeric[, "SEX"])
+
+#T-test filtering (supervised)  
+# keep genes that are statistically different between male and female subjects.
+
+pvals <- apply(X_expr, 2, function(g) {
+  tryCatch(t.test(g ~ sex)$p.value, error = function(e) NA)
+})
+X_df_filtered <- X_df[, which(pvals < 0.05 & !is.na(pvals))]  # 5892 genes left after t-test filtering
+
+# Keep top 1000 most variable genes from the filtered set
+gene_var <- apply(X_df_filtered, 2, var)
+top_var_idx <- order(gene_var, decreasing = TRUE)[1:min(1000, length(gene_var))]
+X_df_final <- X_df_filtered[, c(top_var_idx)]
+
+X_df_final[c(1:5),c(1:5)]
+```
+
+```{r}
+# Fit random forest and get top genes
+set.seed(42)
+rf_model <- randomForest(sex ~ ., data = X_df_final, importance = TRUE)
+
+# Get top 50 important genes
+importance_df <- importance(rf_model)
+top_50_genes <- rownames(importance_df)[order(importance_df[, 1], decreasing = TRUE)[1:50]]
+
+head(top_50_genes,10)
+
+# match the descriptions for the top 50 genes
+top_50_df <- data.frame(Name = top_50_genes)
+top_50_df$Name <- as.character(top_50_df$Name)
+normalized_matched_dat$Name <- as.character(normalized_matched_dat$Name)
+
+top_50_annotated <- merge(top_50_df, normalized_matched_dat[, c("Name", "Description")],
+                          by = "Name", all.x = TRUE)
+
+
+# 5-fold cross-validation to check model accuracy
+library(caret)
+set.seed(123)
+cv_control <- trainControl(method = "cv", number = 5)
+cv_model <- train(
+  x = X_df_final,
+  y = sex,
+  method = "rf",
+  trControl = cv_control,
+  importance = TRUE
+)
+
+print(cv_model$results) # overfitting is possible
+
+```
+
+mtry: Number of features (genes) randomly selected at each tree split. This is a tuning parameter.
+Kappa: Cohen’s Kappa: adjusts for chance agreement. A value > 0.8 is very strong agreement.
+KappaSD: Standard deviation of Kappa, lower = more stable performance
+
+
+```{r}
+# Plot out-of-bag error vs number of trees
+plot(rf_model, main = "OOB Error Rate vs Number of Trees")
+```
+
+

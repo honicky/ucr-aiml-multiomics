@@ -31,6 +31,7 @@ matched_dat<- cbind(dat[,c(1,2)],matched_dat)
 
 ```{r}
 #log transformation
+expr <- matched_dat[, -c(1, 2)]
 log_matched <- log2(expr + 1)
 normalized_matched_dat <- cbind(matched_dat[, 1:2], log_matched)
 ```
