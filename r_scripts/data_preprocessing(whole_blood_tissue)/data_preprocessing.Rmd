@@ -72,8 +72,6 @@ ggplot(sex_linked_long, aes(x = Description, y = Expression, color = SEX)) +
        y = "Normalized Expression",
        color = "Sex") +
   theme_minimal()
-
-
 ```
 
 ## Modify dataset for model application
@@ -87,11 +85,7 @@ X_t <- t(X)
 X_df <- as.data.frame(X_t)
 colnames(X_df)<-matched_dat$Name
 X_df$SEX <- sex_labels
-
-
 X_df$SEX_numeric <- ifelse(X_df$SEX == "Male", 0, 1)
-
-
 ```
 
 
