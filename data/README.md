@@ -29,8 +29,8 @@ Add datasets below with their descriptions:
 - **MD5**: `checksum_here`
 
 ### Hippocampus Dataset
-- **Description**: Dataset of the Hippocampus, UMAP shown here: [(https://cellxgene.cziscience.com/e/acae7679-d077-461c-b857-ee6ccfeb267f.cxg/)]
-- **Source**: [[Link to external repository](https://datasets.cellxgene.cziscience.com/317cdfff-2ed7-4b2b-9f3d-2d6341f37e3f.h5ad)]()
+- **Description**: Dataset of the Hippocampus. [[UMAP shown here](https://cellxgene.cziscience.com/e/acae7679-d077-461c-b857-ee6ccfeb267f.cxg/)]
+- **Source**: [[File download here](https://datasets.cellxgene.cziscience.com/317cdfff-2ed7-4b2b-9f3d-2d6341f37e3f.h5ad)]()
 - **Size**: 331 MB
 - **Format**: h5ad
 - **Usage**: Used for Single Cell Data Analysis
